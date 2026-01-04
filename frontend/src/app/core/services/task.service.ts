@@ -70,6 +70,13 @@ export class TaskService {
       );
   }
 
+  markIncomplete(id: number): Observable<{ success: boolean; data: { task: Task } }> {
+    return this.http.patch<{ success: boolean; data: { task: Task } }>(`${this.API_URL}/${id}/uncomplete`, {})
+      .pipe(
+        tap(() => this.refreshTasks())
+      );
+  }
+
   reorderTasks(taskIds: number[]): Observable<{ success: boolean; message: string }> {
     return this.http.patch<{ success: boolean; message: string }>(`${this.API_URL}/reorder`, { taskIds });
   }

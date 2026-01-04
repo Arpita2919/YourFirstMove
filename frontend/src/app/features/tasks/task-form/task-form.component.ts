@@ -77,6 +77,16 @@ export class TaskFormComponent implements OnInit {
       // Ensure boolean values are proper booleans
       formValue.isCritical = !!formValue.isCritical;
 
+      // Log the exact values being sent
+      console.log('=== TASK FORM SUBMISSION ===');
+      console.log('Title:', formValue.title);
+      console.log('Due Date:', formValue.dueDate);
+      console.log('Due Time (start):', formValue.dueTime);
+      console.log('End Time:', formValue.endTime);
+      console.log('Priority:', formValue.priority);
+      console.log('Is Critical:', formValue.isCritical);
+      console.log('============================');
+
       console.log('Submitting task form:', {
         isEditMode: this.isEditMode,
         taskId: this.data.task?.id,

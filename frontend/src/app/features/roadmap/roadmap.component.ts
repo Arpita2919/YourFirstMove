@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { TaskService } from '../../core/services/task.service';
 import { Task } from '../../core/models/task.model';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
@@ -21,9 +21,10 @@ interface TimeSlot {
 export class RoadmapComponent implements OnInit {
   tasks: Task[] = [];
   loading = false;
+  completingTaskId: number | null = null;
   selectedDate = new Date().toISOString().split('T')[0];
   completionPercentage = 0;
-  viewMode: 'timeline' | 'list' = 'timeline';
+  viewMode = 'timeline' as string; // Explicit type assertion
   timeSlots: TimeSlot[] = [];
   currentTime = new Date();
 
@@ -31,7 +32,8 @@ export class RoadmapComponent implements OnInit {
     private taskService: TaskService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private cdr: ChangeDetectorRef
   ) {
     // Update current time every minute
     setInterval(() => {
@@ -54,6 +56,10 @@ export class RoadmapComponent implements OnInit {
     this.taskService.getTasksByDate(this.selectedDate).subscribe({
       next: (response) => {
         this.tasks = response.data.tasks;
+        console.log('Loaded tasks:', this.tasks);
+        this.tasks.forEach(task => {
+          console.log(`Task: ${task.title}, due_time: ${task.due_time}, end_time: ${(task as any).end_time}`);
+        });
         this.calculateCompletion();
         this.generateTimeSlots();
         this.loading = false;
@@ -75,34 +81,121 @@ export class RoadmapComponent implements OnInit {
         tasks: [] // We'll position tasks absolutely, not in slots
       });
     }
+    
+    console.log(`Generated ${this.timeSlots.length} time slots (0-23 hours)`);
+    console.log('Each hour slot is 100px tall');
+    console.log('Total timeline height: 2400px');
   }
 
   // Get tasks with their visual positioning for timeline
   getTimelineTasksWithPosition(): any[] {
-    return this.tasks
-      .filter(task => task.due_time) // Only tasks with start time
-      .map(task => {
-        const [startHour, startMinute] = task.due_time!.split(':').map(Number);
-        const startPosition = startHour + (startMinute / 60);
+    const scheduledTasks = this.tasks.filter(task => task.due_time);
+    
+    // Calculate positions in pixels (each hour = 100px for excellent visibility)
+    const PIXELS_PER_HOUR = 100;
+    const PIXELS_PER_MINUTE = PIXELS_PER_HOUR / 60;
+    
+    const tasksWithPosition = scheduledTasks.map(task => {
+      const [startHour, startMinute] = task.due_time!.split(':').map(Number);
+      const startMinutes = startHour * 60 + startMinute;
+      
+      // Calculate duration in minutes
+      let durationMinutes = 60; // Default 1 hour if no end time
+      const endTime = (task as any).end_time;
+      if (endTime) {
+        const [endHour, endMinute] = endTime.split(':').map(Number);
+        const endMinutes = endHour * 60 + endMinute;
+        durationMinutes = endMinutes - startMinutes;
         
-        // Calculate duration
-        let duration = 1; // Default 1 hour
-        const endTime = (task as any).end_time;
-        if (endTime) {
-          const [endHour, endMinute] = endTime.split(':').map(Number);
-          const endPosition = endHour + (endMinute / 60);
-          duration = endPosition - startPosition;
-          if (duration <= 0) duration = 1; // Minimum 1 hour
+        // Ensure positive duration
+        if (durationMinutes <= 0) {
+          durationMinutes = 60; // Default to 1 hour if invalid
+        }
+      }
+      
+      // Convert to pixels - NO MINIMUM, use actual duration
+      const topPosition = startMinutes * PIXELS_PER_MINUTE;
+      const height = durationMinutes * PIXELS_PER_MINUTE; // Exact height based on duration
+      
+      // Debug logging
+      console.log(`Task: ${task.title}`);
+      console.log(`  Start time: ${task.due_time} (${startHour}:${startMinute})`);
+      console.log(`  Start minutes: ${startMinutes}`);
+      console.log(`  Top position: ${topPosition}px`);
+      console.log(`  Duration: ${durationMinutes} minutes`);
+      console.log(`  Height: ${height}px`);
+      
+      return {
+        ...task,
+        topPosition,
+        height,
+        startTime: task.due_time,
+        endTime: endTime || this.calculateEndTime(task.due_time!, durationMinutes / 60),
+        startMinutes,
+        durationMinutes
+      };
+    });
+
+    // Detect overlapping tasks and assign columns
+    return this.assignColumnsToTasks(tasksWithPosition);
+  }
+
+  // Assign columns to overlapping tasks so they don't overlap visually
+  assignColumnsToTasks(tasks: any[]): any[] {
+    // Sort by start time
+    const sorted = [...tasks].sort((a, b) => a.startMinutes - b.startMinutes);
+    
+    // Track which columns are occupied at each time
+    const columns: any[][] = [];
+    
+    sorted.forEach(task => {
+      const taskEnd = task.startMinutes + task.durationMinutes;
+      
+      // Find the first available column
+      let columnIndex = 0;
+      let placed = false;
+      
+      while (!placed) {
+        if (!columns[columnIndex]) {
+          columns[columnIndex] = [];
         }
         
-        return {
-          ...task,
-          startPosition: (startPosition / 24) * 100, // Percentage from top
-          height: (duration / 24) * 100, // Height as percentage
-          startTime: task.due_time,
-          endTime: endTime || this.calculateEndTime(task.due_time!, duration)
-        };
+        // Check if this column is free at this time
+        const hasOverlap = columns[columnIndex].some(existingTask => {
+          const existingEnd = existingTask.startMinutes + existingTask.durationMinutes;
+          return !(taskEnd <= existingTask.startMinutes || task.startMinutes >= existingEnd);
+        });
+        
+        if (!hasOverlap) {
+          task.column = columnIndex;
+          task.totalColumns = 1; // Will be updated later
+          columns[columnIndex].push(task);
+          placed = true;
+        } else {
+          columnIndex++;
+        }
+      }
+    });
+    
+    // Update totalColumns for each task based on max columns at that time
+    sorted.forEach(task => {
+      const taskEnd = task.startMinutes + task.durationMinutes;
+      let maxColumns = 1;
+      
+      // Find max columns among overlapping tasks
+      sorted.forEach(otherTask => {
+        const otherEnd = otherTask.startMinutes + otherTask.durationMinutes;
+        const overlaps = !(taskEnd <= otherTask.startMinutes || task.startMinutes >= otherEnd);
+        
+        if (overlaps) {
+          maxColumns = Math.max(maxColumns, otherTask.column + 1);
+        }
       });
+      
+      task.totalColumns = maxColumns;
+    });
+    
+    return sorted;
   }
 
   calculateEndTime(startTime: string, durationHours: number): string {
@@ -169,13 +262,47 @@ export class RoadmapComponent implements OnInit {
     this.taskService.reorderTasks(taskIds).subscribe();
   }
 
+  onCompleteClick(event: Event, task: Task): void {
+    event.stopPropagation();
+    event.preventDefault();
+    console.log('Complete button clicked for task:', task.title, 'is_completed:', task.is_completed);
+    this.toggleComplete(task);
+  }
+
   toggleComplete(task: Task): void {
-    if (task.is_completed) {
+    console.log('toggleComplete called for task:', task.id, 'current status:', task.is_completed);
+    
+    if (this.completingTaskId === task.id) {
+      console.log('Already processing this task');
       return;
     }
-    this.taskService.markComplete(task.id).subscribe(() => {
-      this.loadTasks();
-      this.snackBar.open('Task completed! 🎉', 'Close', { duration: 2000 });
+    
+    this.completingTaskId = task.id;
+    
+    // Toggle between complete and incomplete
+    const apiCall = task.is_completed 
+      ? this.taskService.markIncomplete(task.id)
+      : this.taskService.markComplete(task.id);
+    
+    const message = task.is_completed 
+      ? 'Task marked as incomplete'
+      : 'Task completed! 🎉';
+    
+    console.log('Calling API:', task.is_completed ? 'markIncomplete' : 'markComplete');
+    
+    apiCall.subscribe({
+      next: (response) => {
+        console.log('API response:', response);
+        this.snackBar.open(message, 'Close', { duration: 2000 });
+        this.completingTaskId = null;
+        this.loadTasks();
+      },
+      error: (error) => {
+        console.error('Error toggling task completion:', error);
+        console.error('Error details:', error.error);
+        this.snackBar.open('Failed to update task: ' + (error.error?.message || error.message), 'Close', { duration: 3000 });
+        this.completingTaskId = null;
+      }
     });
   }
 
@@ -206,11 +333,30 @@ export class RoadmapComponent implements OnInit {
     this.loadTasks();
   }
 
+  setViewMode(mode: string): void {
+    console.log('setViewMode called with:', mode);
+    this.viewMode = mode;
+    console.log('viewMode set to:', this.viewMode);
+    this.cdr.detectChanges();
+    console.log('Change detection triggered');
+  }
+
   toggleViewMode(): void {
     this.viewMode = this.viewMode === 'timeline' ? 'list' : 'timeline';
+    console.log('View mode toggled to:', this.viewMode);
+    this.cdr.detectChanges(); // Force change detection
+    console.log('After change detection, viewMode:', this.viewMode);
   }
 
   getUnscheduledTasks(): Task[] {
     return this.tasks.filter(task => !task.due_time);
+  }
+
+  isListView(): boolean {
+    return this.viewMode === 'list';
+  }
+
+  isTimelineView(): boolean {
+    return this.viewMode === 'timeline';
   }
 }

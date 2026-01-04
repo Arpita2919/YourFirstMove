@@ -224,6 +224,26 @@ export class TaskService {
     }
   }
 
+  async markIncomplete(taskId: number, userId: number): Promise<Task> {
+    try {
+      const task = await this.getTask(taskId, userId);
+      
+      const updatedTask = await task.$query().patchAndFetch({
+        is_completed: false,
+        completed_at: null,
+      });
+
+      // Update productivity metrics
+      await this.analyticsService.updateStreakData(userId);
+
+      logger.info(`Task marked incomplete: ${taskId}`);
+      return updatedTask;
+    } catch (error) {
+      logger.error('Task incompletion error:', error);
+      throw error;
+    }
+  }
+
   async reorderTasks(userId: number, taskIds: number[]): Promise<void> {
     try {
       // Update display_order for each task

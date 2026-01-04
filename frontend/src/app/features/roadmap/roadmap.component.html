@@ -11,7 +11,7 @@
         <!-- View Toggle -->
         <div class="glass flex items-center gap-2 p-1 rounded-lg">
           <button 
-            (click)="viewMode = 'timeline'"
+            (click)="setViewMode('timeline')"
             [class.btn-primary]="viewMode === 'timeline'"
             [class.btn-ghost]="viewMode !== 'timeline'"
             class="btn btn-sm"
@@ -20,7 +20,7 @@
             Timeline
           </button>
           <button 
-            (click)="viewMode = 'list'"
+            (click)="setViewMode('list')"
             [class.btn-primary]="viewMode === 'list'"
             [class.btn-ghost]="viewMode !== 'list'"
             class="btn btn-sm"
@@ -84,10 +84,11 @@
   </div>
 
   <!-- Timeline View with Time Blocks -->
-  <div *ngIf="!loading && tasks.length > 0 && viewMode === 'timeline'" class="glass-strong card animate-scale-in" style="padding: 2rem;">
-    <div class="timeline-wrapper">
-      <!-- 24-Hour Timeline Background -->
-      <div class="timeline-hours">
+  <div *ngIf="!loading && tasks.length > 0 && isTimelineView()" class="glass-strong card animate-scale-in" style="padding: 2rem;">
+    <div class="timeline-container">
+      <div class="timeline-wrapper">
+        <!-- 24-Hour Timeline Background -->
+        <div class="timeline-hours">
         <div *ngFor="let slot of timeSlots" class="hour-line" [class.current-hour]="isCurrentHour(slot.hour)">
           <span class="hour-label">{{ slot.displayTime }}</span>
         </div>
@@ -97,66 +98,105 @@
       <div class="timeline-tasks-container">
         <div 
           *ngFor="let task of getTimelineTasksWithPosition()"
-          class="timeline-task-block card hover-lift"
+          class="timeline-task-block"
           [class.priority-low]="task.priority === 'low'"
           [class.priority-medium]="task.priority === 'medium'"
           [class.priority-high]="task.priority === 'high'"
           [class.priority-critical]="task.priority === 'critical'"
           [class.completed]="task.is_completed"
-          [style.top.%]="task.startPosition"
-          [style.height.%]="task.height"
-          (click)="openTaskDialog(task)"
+          [class.task-small]="task.height < 80"
+          [style.top.px]="task.topPosition"
+          [style.height.px]="task.height"
+          [style.left]="'calc(' + (task.column * 100 / task.totalColumns) + '% + 8px)'"
+          [style.width]="'calc(' + (100 / task.totalColumns) + '% - 16px)'"
         >
-          <div class="task-block-content">
-            <div class="flex items-start justify-between gap-2 mb-2">
-              <div class="flex-1 min-w-0">
-                <h4 class="font-semibold text-sm mb-1" [class.line-through]="task.is_completed" style="color: var(--color-text-primary);">
+          <!-- Priority Accent Bar -->
+          <div class="priority-accent"></div>
+          
+          <!-- Task Content -->
+          <div class="task-content" (click)="openTaskDialog(task)">
+            <!-- Header -->
+            <div class="task-header">
+              <div class="task-title-section">
+                <div class="task-icon-wrapper">
+                  <mat-icon class="task-icon">{{ task.is_completed ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+                </div>
+                <h4 class="task-title" [class.completed-text]="task.is_completed">
                   {{ task.title }}
                 </h4>
-                <p class="text-xs mb-2" style="color: var(--color-text-secondary);" *ngIf="task.description">
-                  {{ task.description }}
-                </p>
               </div>
-              <button 
-                (click)="toggleComplete(task); $event.stopPropagation()"
-                class="btn btn-ghost btn-sm flex-shrink-0"
-              >
-                <mat-icon class="text-sm">{{ task.is_completed ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
-              </button>
-            </div>
-            
-            <div class="flex items-center justify-between text-xs flex-wrap gap-2">
-              <div class="flex items-center gap-2">
-                <span class="flex items-center gap-1" style="color: var(--color-text-tertiary);">
-                  <mat-icon class="text-xs">schedule</mat-icon>
-                  {{ task.startTime }} - {{ task.endTime }}
-                </span>
-                <span 
-                  class="px-2 py-0.5 rounded-full"
-                  [ngClass]="getPriorityClass(task.priority)"
+              
+              <!-- Quick Actions -->
+              <div class="task-actions">
+                <button 
+                  (click)="onCompleteClick($event, task)"
+                  class="action-btn complete-btn"
+                  [class.completed-btn]="task.is_completed"
+                  [class.loading]="completingTaskId === task.id"
+                  [disabled]="completingTaskId === task.id"
+                  matTooltip="{{ task.is_completed ? 'Mark incomplete' : 'Mark complete' }}"
+                  type="button"
                 >
-                  {{ task.priority }}
-                </span>
+                  <mat-icon *ngIf="completingTaskId !== task.id">{{ task.is_completed ? 'check_circle' : 'check' }}</mat-icon>
+                  <span *ngIf="completingTaskId === task.id" class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></span>
+                </button>
               </div>
+            </div>
+
+            <!-- Description (for taller tasks) -->
+            <p class="task-description" *ngIf="task.description && task.height > 100">
+              {{ task.description }}
+            </p>
+
+            <!-- Footer -->
+            <div class="task-footer">
+              <!-- Time Badge -->
+              <div class="time-badge">
+                <mat-icon class="badge-icon">schedule</mat-icon>
+                <span class="badge-text">{{ task.startTime }} - {{ task.endTime }}</span>
+              </div>
+
+              <!-- Priority Badge (for taller tasks) -->
+              <div class="priority-badge" *ngIf="task.height > 80">
+                <span class="badge-dot"></span>
+                <span class="badge-text">{{ task.priority }}</span>
+              </div>
+
+              <!-- Critical Indicator -->
+              <div class="critical-indicator" *ngIf="task.is_critical && task.height > 80">
+                <mat-icon class="critical-icon">priority_high</mat-icon>
+              </div>
+
+              <!-- Delete Button (for taller tasks) -->
               <button 
+                *ngIf="task.height > 100"
                 (click)="deleteTask(task, $event)"
-                class="btn btn-ghost btn-sm"
-                style="color: var(--color-error);"
+                class="action-btn delete-btn"
+                matTooltip="Delete task"
               >
-                <mat-icon class="text-xs">delete</mat-icon>
+                <mat-icon>delete_outline</mat-icon>
               </button>
             </div>
           </div>
+
+          <!-- Completion Overlay -->
+          <div class="completion-overlay" *ngIf="task.is_completed">
+            <mat-icon class="completion-icon">check_circle</mat-icon>
+          </div>
+
+          <!-- Hover Glow Effect -->
+          <div class="hover-glow"></div>
         </div>
 
         <!-- Current Time Indicator -->
         <div 
           *ngIf="selectedDate === (currentTime | date:'yyyy-MM-dd')"
           class="current-time-line"
-          [style.top.%]="(currentTime.getHours() + currentTime.getMinutes() / 60) / 24 * 100"
+          [style.top.px]="(currentTime.getHours() * 60 + currentTime.getMinutes()) * (100 / 60)"
         >
           <div class="time-marker-line"></div>
           <div class="time-marker-dot"></div>
+          <span class="time-marker-label">{{ currentTime | date:'h:mm a' }}</span>
         </div>
       </div>
     </div>
@@ -209,49 +249,58 @@
   </div>
 
   <!-- List View -->
-  <div cdkDropList (cdkDropListDropped)="drop($event)" *ngIf="!loading && tasks.length > 0 && viewMode === 'list'" class="space-y-4 animate-scale-in">
-    <div *ngFor="let task of tasks" cdkDrag class="glass-strong card hover-lift cursor-move" [ngClass]="getPriorityBorderClass(task.priority)">
-      <div class="flex items-center gap-4">
-        <mat-icon cdkDragHandle class="cursor-move" style="color: var(--color-text-tertiary);">drag_indicator</mat-icon>
-        
-        <mat-checkbox 
-          [checked]="task.is_completed" 
-          (change)="toggleComplete(task)"
-          [disabled]="task.is_completed">
-        </mat-checkbox>
+  <div *ngIf="!loading && tasks.length > 0 && isListView()" class="list-view-container animate-scale-in">
+    <h2 style="color: var(--color-text-primary); margin-bottom: 1rem;">Tasks ({{ tasks.length }})</h2>
+    <div cdkDropList (cdkDropListDropped)="drop($event)">
+      <div 
+        *ngFor="let task of tasks; let i = index" 
+        cdkDrag 
+        class="glass-strong card hover-lift cursor-move p-4 mb-4" 
+        [ngClass]="getPriorityBorderClass(task.priority)"
+        style="display: flex !important; width: 100%;"
+      >
+        <div class="flex items-center gap-4" style="width: 100%;">
+          <mat-icon cdkDragHandle class="cursor-move" style="color: var(--color-text-tertiary);">drag_indicator</mat-icon>
+          
+          <mat-checkbox 
+            [checked]="task.is_completed" 
+            (change)="toggleComplete(task)"
+            [disabled]="task.is_completed">
+          </mat-checkbox>
 
-        <div class="flex-1 min-w-0" (click)="openTaskDialog(task)" class="cursor-pointer">
-          <h3 class="text-lg font-semibold mb-1" [class.line-through]="task.is_completed" style="color: var(--color-text-primary);">
-            {{ task.title }}
-          </h3>
-          <p class="text-sm mb-2" *ngIf="task.description" style="color: var(--color-text-secondary);">{{ task.description }}</p>
-          <div class="flex gap-2 flex-wrap">
-            <span class="text-xs px-2 py-1 rounded-full" [ngClass]="getPriorityClass(task.priority)">
-              {{ task.priority | uppercase }}
-            </span>
-            <span class="text-xs px-2 py-1 rounded-full flex items-center gap-1" *ngIf="task.due_time" style="background: var(--color-primary-light); color: var(--color-primary);">
-              <mat-icon class="text-xs">schedule</mat-icon>
-              {{ task.due_time }}
-            </span>
-            <span class="text-xs px-2 py-1 rounded-full flex items-center gap-1" *ngIf="task.is_critical" style="background: rgba(239, 68, 68, 0.1); color: var(--color-error);">
-              <mat-icon class="text-xs">notification_important</mat-icon>
-              Critical
-            </span>
-            <span class="text-xs px-2 py-1 rounded-full flex items-center gap-1" *ngIf="task.is_completed" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);">
-              <mat-icon class="text-xs">check_circle</mat-icon>
-              Completed
-            </span>
+          <div class="flex-1 min-w-0" (click)="openTaskDialog(task)" class="cursor-pointer">
+            <h3 class="text-lg font-semibold mb-1" [class.line-through]="task.is_completed" style="color: var(--color-text-primary);">
+              {{ task.title }}
+            </h3>
+            <p class="text-sm mb-2" *ngIf="task.description" style="color: var(--color-text-secondary);">{{ task.description }}</p>
+            <div class="flex gap-2 flex-wrap">
+              <span class="text-xs px-2 py-1 rounded-full" [ngClass]="getPriorityClass(task.priority)">
+                {{ task.priority | uppercase }}
+              </span>
+              <span class="text-xs px-2 py-1 rounded-full flex items-center gap-1" *ngIf="task.due_time" style="background: var(--color-primary-light); color: var(--color-primary);">
+                <mat-icon class="text-xs">schedule</mat-icon>
+                {{ task.due_time }}
+              </span>
+              <span class="text-xs px-2 py-1 rounded-full flex items-center gap-1" *ngIf="task.is_critical" style="background: rgba(239, 68, 68, 0.1); color: var(--color-error);">
+                <mat-icon class="text-xs">notification_important</mat-icon>
+                Critical
+              </span>
+              <span class="text-xs px-2 py-1 rounded-full flex items-center gap-1" *ngIf="task.is_completed" style="background: rgba(34, 197, 94, 0.1); color: var(--color-success);">
+                <mat-icon class="text-xs">check_circle</mat-icon>
+                Completed
+              </span>
+            </div>
           </div>
-        </div>
 
-        <button 
-          (click)="deleteTask(task, $event)" 
-          matTooltip="Delete task"
-          class="btn btn-ghost"
-          style="color: var(--color-error);"
-        >
-          <mat-icon>delete</mat-icon>
-        </button>
+          <button 
+            (click)="deleteTask(task, $event)" 
+            matTooltip="Delete task"
+            class="btn btn-ghost"
+            style="color: var(--color-error);"
+          >
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
       </div>
     </div>
   </div>

@@ -102,6 +102,20 @@ router.patch('/:id/complete', async (req: AuthRequest, res, next) => {
   }
 });
 
+// Mark task incomplete
+router.patch('/:id/uncomplete', async (req: AuthRequest, res, next) => {
+  try {
+    const task = await taskService.markIncomplete(parseInt(req.params.id), req.userId!);
+
+    res.json({
+      success: true,
+      data: { task },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Reorder tasks
 router.patch('/reorder', async (req: AuthRequest, res, next) => {
   try {
