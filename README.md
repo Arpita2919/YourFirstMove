@@ -4,10 +4,14 @@ A full-stack productivity platform for managing daily and monthly tasks. Feature
 
 ## Features
 
+- **Social OAuth Login**: Sign in with Google, LinkedIn, or GitHub (Google tested & working)
 - **Visual Timeline Roadmap**: 24-hour schedule view with tasks mapped to specific times and current time indicator
+- **Task Duration Blocks**: Tasks display as time blocks spanning from start to end time
+- **Task Completion Tracking**: Mark tasks as complete/incomplete directly in timeline view
+- **Schedule Duplication**: Copy entire day's schedule to other dates
 - **List View**: Drag-and-drop task reordering 
 - **Monthly Calendar View**: Overview with task counts and completion rates
-- **Automated SMS Notifications**: Critical task reminders via Twilio
+- **Automated SMS Notifications**: Critical task reminders via Twilio (optional)
 - **Real-Time Progress Tracking**: Live completion percentages and analytics
 - **Productivity Streaks**: Gamified daily completion tracking
 - **Progressive Web App**: Offline functionality with background sync
@@ -33,15 +37,17 @@ A full-stack productivity platform for managing daily and monthly tasks. Feature
 - Knex.js (database migrations)
 - Objection.js (ORM)
 - JWT authentication
+- Passport.js (OAuth strategies)
 - node-cron (scheduled jobs)
-- Twilio API (SMS)
+- Twilio API (SMS - optional)
 
 ## Prerequisites
 
 - Node.js 20+ LTS
 - MySQL 8.0+
 - npm or yarn
-- Twilio account (for SMS notifications)
+- Twilio account (optional - for SMS notifications)
+- OAuth credentials (optional - for social login with Google/LinkedIn/GitHub)
 
 ## Installation
 
@@ -89,7 +95,27 @@ CORS_ORIGIN=http://localhost:4200
 # Rate Limiting
 RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX_REQUESTS=100
+
+# OAuth (Optional - for social login)
+FRONTEND_URL=http://localhost:4200
+BACKEND_URL=http://localhost:3000
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+LINKEDIN_CLIENT_ID=your_linkedin_client_id
+LINKEDIN_CLIENT_SECRET=your_linkedin_client_secret
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
 ```
+
+**To get OAuth credentials:**
+- **Google**: https://console.cloud.google.com/apis/credentials
+- **LinkedIn**: https://www.linkedin.com/developers/apps
+- **GitHub**: https://github.com/settings/developers
+
+**OAuth Callback URLs (configure in provider console):**
+- Google: `http://localhost:3000/api/auth/google/callback`
+- LinkedIn: `http://localhost:3000/api/auth/linkedin/callback`
+- GitHub: `http://localhost:3000/api/auth/github/callback`
 
 **Frontend (environment.ts in frontend/src/environments/):**
 ```typescript
@@ -185,6 +211,14 @@ npx knex migrate:make migration_name
 - `POST /api/auth/reset-password` - Complete password reset
 - `GET /api/auth/me` - Get current user profile
 
+**OAuth Endpoints (Optional):**
+- `GET /api/auth/google` - Initiate Google OAuth flow
+- `GET /api/auth/google/callback` - Google OAuth callback
+- `GET /api/auth/linkedin` - Initiate LinkedIn OAuth flow
+- `GET /api/auth/linkedin/callback` - LinkedIn OAuth callback
+- `GET /api/auth/github` - Initiate GitHub OAuth flow
+- `GET /api/auth/github/callback` - GitHub OAuth callback
+
 ### Task Endpoints
 
 - `GET /api/tasks` - List tasks (with pagination, filters)
@@ -196,6 +230,7 @@ npx knex migrate:make migration_name
 - `PATCH /api/tasks/:id/reorder` - Update task order
 - `GET /api/tasks/daily/:date` - Get tasks for specific date
 - `GET /api/tasks/monthly/:month` - Get tasks for specific month
+- `POST /api/tasks/duplicate-day` - Duplicate schedule from one date to another
 
 ### User Endpoints
 
@@ -234,6 +269,8 @@ npx knex migrate:make migration_name
 ## Security Features
 
 - JWT-based authentication
+- OAuth 2.0 social login (Google, LinkedIn, GitHub)
+- Passport.js authentication strategies
 - Bcrypt password hashing
 - HTTPS enforcement in production
 - SQL injection prevention via parameterized queries
@@ -241,6 +278,7 @@ npx knex migrate:make migration_name
 - CORS policy enforcement
 - Rate limiting (100 requests/minute)
 - Helmet.js security headers
+- Secure OAuth token storage
 
 ## Performance Optimizations
 
@@ -258,7 +296,9 @@ npx knex migrate:make migration_name
 - Set `NODE_ENV=production`
 - Configure production database credentials
 - Set strong JWT secret
-- Configure Twilio credentials
+- Configure OAuth credentials (Google, LinkedIn, GitHub)
+- Update OAuth callback URLs to production domain
+- Configure Twilio credentials (optional)
 - Enable HTTPS
 - Set appropriate CORS origins
 - Set up database backups
@@ -269,6 +309,45 @@ npx knex migrate:make migration_name
 - **Frontend**: Vercel, Netlify, AWS S3 + CloudFront
 - **Backend**: AWS EC2, DigitalOcean, Heroku
 - **Database**: AWS RDS, DigitalOcean Managed MySQL
+
+## OAuth Social Login Setup (Optional)
+
+### How OAuth Works
+1. User clicks "Continue with Google/LinkedIn/GitHub" on login page
+2. User is redirected to provider's authorization page
+3. After authorization, provider redirects back to your app with a code
+4. Backend exchanges code for access token and user info
+5. User is automatically logged in with JWT token
+
+### User Account Linking
+- **New User**: Creates account with OAuth credentials
+- **Existing Email**: Links OAuth to existing email/password account
+- **Returning User**: Instant login with token refresh
+- **Provider Conflict**: Error if email already linked to different provider
+
+### Testing OAuth
+1. Add OAuth credentials to `backend/.env`
+2. Restart backend server
+3. Visit `http://localhost:4200/login`
+4. Click "Continue with Google" (or other provider)
+5. Authorize and you'll be automatically logged in
+
+## Troubleshooting
+
+### Backend Issues
+- **Database connection failed**: Check MySQL is running and credentials are correct
+- **Migration errors**: Ensure database exists and user has proper permissions
+- **Port already in use**: Change PORT in backend/.env or kill process using the port
+
+### Frontend Issues
+- **Compilation errors**: Clear node_modules and reinstall: `rm -rf node_modules && npm install`
+- **API connection failed**: Verify backend is running on correct port
+- **OAuth not working**: Check credentials in backend/.env and callback URLs in provider console
+
+### OAuth Issues
+- **"Unknown authentication strategy"**: Restart backend after adding OAuth credentials
+- **Redirect fails**: Verify callback URLs match in both .env and provider console
+- **Token not stored**: Check browser console for errors and localStorage
 
 ## License
 

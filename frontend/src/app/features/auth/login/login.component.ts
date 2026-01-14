@@ -3,6 +3,7 @@ import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-login',
@@ -42,5 +43,20 @@ export class LoginComponent {
         }
       });
     }
+  }
+
+  /**
+   * OAuth Sign In Methods
+   */
+  signInWithGoogle(): void {
+    window.location.href = `${environment.apiUrl}/auth/google`;
+  }
+
+  signInWithLinkedIn(): void {
+    window.location.href = `${environment.apiUrl}/auth/linkedin`;
+  }
+
+  signInWithGitHub(): void {
+    window.location.href = `${environment.apiUrl}/auth/github`;
   }
 }

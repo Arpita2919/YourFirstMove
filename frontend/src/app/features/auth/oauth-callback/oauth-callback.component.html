@@ -1,0 +1,45 @@
+<div class="min-h-screen flex items-center justify-center" style="background: var(--color-background);">
+  <div class="glass-strong card text-center" style="max-width: 500px; padding: 3rem;">
+    <!-- Loading State -->
+    <div *ngIf="loading && !error" class="animate-fade-in">
+      <div class="spinner mx-auto mb-6" style="width: 64px; height: 64px; border-width: 4px;"></div>
+      <h2 class="text-2xl font-bold mb-2 text-gradient">Completing Sign In...</h2>
+      <p style="color: var(--color-text-secondary);">
+        Please wait while we set up your account
+      </p>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="error" class="animate-scale-in">
+      <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center" 
+           style="background: rgba(239, 68, 68, 0.1);">
+        <mat-icon style="font-size: 48px; width: 48px; height: 48px; color: var(--color-error);">
+          error_outline
+        </mat-icon>
+      </div>
+      <h2 class="text-2xl font-bold mb-2" style="color: var(--color-error);">
+        Authentication Failed
+      </h2>
+      <p class="mb-6" style="color: var(--color-text-secondary);">
+        {{ error }}
+      </p>
+      <p class="text-sm" style="color: var(--color-text-tertiary);">
+        Redirecting to login page...
+      </p>
+    </div>
+
+    <!-- Success State (brief) -->
+    <div *ngIf="!loading && !error" class="animate-scale-in">
+      <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center" 
+           style="background: rgba(34, 197, 94, 0.1);">
+        <mat-icon style="font-size: 48px; width: 48px; height: 48px; color: var(--color-success);">
+          check_circle
+        </mat-icon>
+      </div>
+      <h2 class="text-2xl font-bold mb-2 text-gradient">Success!</h2>
+      <p style="color: var(--color-text-secondary);">
+        Redirecting to dashboard...
+      </p>
+    </div>
+  </div>
+</div>
